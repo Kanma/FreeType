@@ -40,7 +40,6 @@ set(SRCS src/autofit/autofit.c
          src/pshinter/pshinter.c
          src/psnames/psmodule.c
          src/raster/raster.c
-         src/smooth/ftsmooth.c
          src/sfnt/sfnt.c
          src/truetype/truetype.c
          src/type1/type1.c
