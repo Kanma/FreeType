@@ -12,6 +12,17 @@ if (NOT ATHENA_BINARY_DIR)
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${FREETYPE_BINARY_DIR}/lib")
 endif()
 
+# XMake settings
+if (EXISTS "${FREETYPE_SOURCE_DIR}/dependencies/xmake/XMake.cmake")
+    include("${FREETYPE_SOURCE_DIR}/dependencies/xmake/XMake.cmake")
+endif()
+
+xmake_init_static(FREETYPE)
+xmake_add_include_paths(FREETYPE ${FREETYPE_SOURCE_DIR}/include)
+xmake_add_link_paths(FREETYPE "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}")
+xmake_add_link_targets(FREETYPE freetype)
+
+
 # List the source files
 set(SRCS src/autofit/autofit.c
          src/base/ftbase.c
@@ -48,7 +59,7 @@ set(SRCS src/autofit/autofit.c
 )
 
 # List the include paths
-include_directories(include)
+xmake_include_directories(FREETYPE)
 
 # Declaration of the library
 add_library(freetype STATIC ${SRCS})
