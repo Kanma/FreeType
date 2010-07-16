@@ -68,7 +68,7 @@ add_library(freetype STATIC ${SRCS})
 set_target_properties(freetype PROPERTIES COMPILE_DEFINITIONS "_CRT_SECURE_NO_WARNINGS;FT2_BUILD_LIBRARY")
 
 if (NOT WIN32)
-    set_target_properties(freetype PROPERTIES COMPILE_FLAGS "-w")
+    set_target_properties(freetype PROPERTIES COMPILE_FLAGS "-w -fPIC")
 else()
     set_target_properties(freetype PROPERTIES COMPILE_FLAGS "/W0")
 endif()
