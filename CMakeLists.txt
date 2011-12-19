@@ -1,27 +1,44 @@
 cmake_minimum_required(VERSION 2.6)
 project(FREETYPE)
 
-# Options
-if (NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: None (CMAKE_CXX_FLAGS or CMAKE_C_FLAGS used) Debug Release RelWithDebInfo MinSizeRel." FORCE)
+
+##########################################################################################
+# XMake-related settings
+
+# Set the output paths
+if (NOT DEFINED XMAKE_BINARY_DIR)
+    set(XMAKE_BINARY_DIR "${FREETYPE_BINARY_DIR}")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${XMAKE_BINARY_DIR}/bin")
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${XMAKE_BINARY_DIR}/lib")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${XMAKE_BINARY_DIR}/bin")
 endif()
 
-# Set the output path
-if (NOT ATHENA_BINARY_DIR)
-    set(ATHENA_BINARY_DIR "${FREETYPE_BINARY_DIR}")
-    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${FREETYPE_BINARY_DIR}/lib")
+# Set the dependencies path
+if (NOT DEFINED XMAKE_DEPENDENCIES_DIR)
+    set(XMAKE_DEPENDENCIES_DIR "${FREETYPE_SOURCE_DIR}/dependencies")
 endif()
 
-# XMake settings
-if (EXISTS "${FREETYPE_SOURCE_DIR}/dependencies/xmake/XMake.cmake")
-    include("${FREETYPE_SOURCE_DIR}/dependencies/xmake/XMake.cmake")
+
+##########################################################################################
+# XMake importation
+
+if (NOT EXISTS "${XMAKE_DEPENDENCIES_DIR}/XMake/XMake.cmake")
+    message(FATAL_ERROR
+"Missing dependency: XMake
+This distribution of FreeType requires XMake as a dependency.
+
+It is provided as GIT submodule of this repository.
+
+Did you forgot to execute the following commands?
+   git submodule init
+   git submodule update")
 endif()
 
-xmake_init_static(FREETYPE)
-xmake_add_include_paths(FREETYPE ${FREETYPE_SOURCE_DIR}/include)
-xmake_add_link_paths(FREETYPE "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}")
-xmake_add_link_targets(FREETYPE freetype)
+include("${XMAKE_DEPENDENCIES_DIR}/XMake/XMake.cmake")
 
+
+##########################################################################################
+# Declaration of the library
 
 # List the source files
 set(SRCS src/autofit/autofit.c
@@ -59,16 +76,21 @@ set(SRCS src/autofit/autofit.c
 )
 
 # List the include paths
-xmake_include_directories(FREETYPE)
+set(INCLUDE_PATHS "${FREETYPE_SOURCE_DIR}/include")
+
+include_directories(${INCLUDE_PATHS})
 
 # Declaration of the library
-add_library(freetype STATIC ${SRCS})
+xmake_create_static_library(FREETYPE freetype ${SRCS})
 
-# Compilation settings
-set_target_properties(freetype PROPERTIES COMPILE_DEFINITIONS "_CRT_SECURE_NO_WARNINGS;FT2_BUILD_LIBRARY")
+xmake_add_to_list_property(FREETYPE COMPILE_DEFINITIONS "FT2_BUILD_LIBRARY")
 
 if (NOT WIN32)
-    set_target_properties(freetype PROPERTIES COMPILE_FLAGS "-w -fPIC")
+    xmake_add_to_property(FREETYPE COMPILE_FLAGS "-w")
 else()
-    set_target_properties(freetype PROPERTIES COMPILE_FLAGS "/W0")
+    xmake_add_to_property(FREETYPE COMPILE_FLAGS "/W0")
+    xmake_add_to_list_property(FREETYPE COMPILE_DEFINITIONS "_CRT_SECURE_NO_DEPRECATE")
 endif()
+
+# Exportations
+xmake_export_include_paths(FREETYPE ${INCLUDE_PATHS})
