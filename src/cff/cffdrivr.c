@@ -4,7 +4,7 @@
 /*                                                                         */
 /*    OpenType font driver implementation (body).                          */
 /*                                                                         */
-/*  Copyright 1996-2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009 by */
+/*  Copyright 1996-2012 by                                                 */
 /*  David Turner, Robert Wilhelm, and Werner Lemberg.                      */
 /*                                                                         */
 /*  This file is part of the FreeType project, and may only be used,       */
@@ -22,7 +22,6 @@
 #include FT_INTERNAL_STREAM_H
 #include FT_INTERNAL_SFNT_H
 #include FT_SERVICE_CID_H
-#include FT_SERVICE_POSTSCRIPT_CMAPS_H
 #include FT_SERVICE_POSTSCRIPT_INFO_H
 #include FT_SERVICE_POSTSCRIPT_NAME_H
 #include FT_SERVICE_TT_CMAP_H
@@ -126,7 +125,7 @@
   /*************************************************************************/
   /*                                                                       */
   /* <Function>                                                            */
-  /*    Load_Glyph                                                         */
+  /*    cff_glyph_load                                                     */
   /*                                                                       */
   /* <Description>                                                         */
   /*    A driver method used to load a glyph within a given glyph slot.    */
@@ -150,10 +149,10 @@
   /*    FreeType error code.  0 means success.                             */
   /*                                                                       */
   FT_CALLBACK_DEF( FT_Error )
-  Load_Glyph( FT_GlyphSlot  cffslot,        /* CFF_GlyphSlot */
-              FT_Size       cffsize,        /* CFF_Size      */
-              FT_UInt       glyph_index,
-              FT_Int32      load_flags )
+  cff_glyph_load( FT_GlyphSlot  cffslot,      /* CFF_GlyphSlot */
+                  FT_Size       cffsize,      /* CFF_Size      */
+                  FT_UInt       glyph_index,
+                  FT_Int32      load_flags )
   {
     FT_Error       error;
     CFF_GlyphSlot  slot = (CFF_GlyphSlot)cffslot;
@@ -204,7 +203,7 @@
 
     for ( nn = 0; nn < count; nn++ )
     {
-      error = Load_Glyph( slot, face->size, start + nn, flags );
+      error = cff_glyph_load( slot, face->size, start + nn, flags );
       if ( error )
         break;
 
@@ -228,22 +227,19 @@
                       FT_Pointer  buffer,
                       FT_UInt     buffer_max )
   {
-    CFF_Font            font   = (CFF_Font)face->extra.data;
-    FT_Memory           memory = FT_FACE_MEMORY( face );
-    FT_String*          gname;
-    FT_UShort           sid;
-    FT_Service_PsCMaps  psnames;
-    FT_Error            error;
+    CFF_Font    font   = (CFF_Font)face->extra.data;
+    FT_String*  gname;
+    FT_UShort   sid;
+    FT_Error    error;
 
 
-    FT_FACE_FIND_GLOBAL_SERVICE( face, psnames, POSTSCRIPT_CMAPS );
-    if ( !psnames )
+    if ( !font->psnames )
     {
       FT_ERROR(( "cff_get_glyph_name:"
                  " cannot get glyph name from CFF & CEF fonts\n"
                  "                   "
                  " without the `PSNames' module\n" ));
-      error = CFF_Err_Unknown_File_Format;
+      error = CFF_Err_Missing_Module;
       goto Exit;
     }
 
@@ -251,12 +247,11 @@
     sid = font->charset.sids[glyph_index];
 
     /* now, lookup the name itself */
-    gname = cff_index_get_sid_string( &font->string_index, sid, psnames );
+    gname = cff_index_get_sid_string( font, sid );
 
     if ( gname )
       FT_STRCPYN( buffer, gname, buffer_max );
 
-    FT_FREE( gname );
     error = CFF_Err_Ok;
 
   Exit:
@@ -271,11 +266,9 @@
     CFF_Font            cff;
     CFF_Charset         charset;
     FT_Service_PsCMaps  psnames;
-    FT_Memory           memory = FT_FACE_MEMORY( face );
     FT_String*          name;
     FT_UShort           sid;
     FT_UInt             i;
-    FT_Int              result;
 
 
     cff     = (CFF_FontRec *)face->extra.data;
@@ -290,19 +283,14 @@
       sid = charset->sids[i];
 
       if ( sid > 390 )
-        name = cff_index_get_name( &cff->string_index, sid - 391 );
+        name = cff_index_get_string( cff, sid - 391 );
       else
         name = (FT_String *)psnames->adobe_std_strings( sid );
 
       if ( !name )
         continue;
 
-      result = ft_strcmp( glyph_name, name );
-
-      if ( sid > 390 )
-        FT_FREE( name );
-
-      if ( !result )
+      if ( !ft_strcmp( glyph_name, name ) )
         return i;
     }
 
@@ -333,35 +321,29 @@
                         PS_FontInfoRec*  afont_info )
   {
     CFF_Font  cff   = (CFF_Font)face->extra.data;
-    FT_Error  error = FT_Err_Ok;
+    FT_Error  error = CFF_Err_Ok;
 
 
     if ( cff && cff->font_info == NULL )
     {
-      CFF_FontRecDict     dict    = &cff->top_font.font_dict;
-      PS_FontInfoRec     *font_info;
-      FT_Memory           memory  = face->root.memory;
-      FT_Service_PsCMaps  psnames = (FT_Service_PsCMaps)cff->psnames;
+      CFF_FontRecDict  dict   = &cff->top_font.font_dict;
+      PS_FontInfoRec  *font_info = NULL;
+      FT_Memory        memory = face->root.memory;
 
 
       if ( FT_ALLOC( font_info, sizeof ( *font_info ) ) )
         goto Fail;
 
-      font_info->version     = cff_index_get_sid_string( &cff->string_index,
-                                                         dict->version,
-                                                         psnames );
-      font_info->notice      = cff_index_get_sid_string( &cff->string_index,
-                                                         dict->notice,
-                                                         psnames );
-      font_info->full_name   = cff_index_get_sid_string( &cff->string_index,
-                                                         dict->full_name,
-                                                         psnames );
-      font_info->family_name = cff_index_get_sid_string( &cff->string_index,
-                                                         dict->family_name,
-                                                         psnames );
-      font_info->weight      = cff_index_get_sid_string( &cff->string_index,
-                                                         dict->weight,
-                                                         psnames );
+      font_info->version     = cff_index_get_sid_string( cff,
+                                                         dict->version );
+      font_info->notice      = cff_index_get_sid_string( cff,
+                                                         dict->notice );
+      font_info->full_name   = cff_index_get_sid_string( cff,
+                                                         dict->full_name );
+      font_info->family_name = cff_index_get_sid_string( cff,
+                                                         dict->family_name );
+      font_info->weight      = cff_index_get_sid_string( cff,
+                                                         dict->weight );
       font_info->italic_angle        = dict->italic_angle;
       font_info->is_fixed_pitch      = dict->is_fixed_pitch;
       font_info->underline_position  = (FT_Short)dict->underline_position;
@@ -382,7 +364,8 @@
     (PS_GetFontInfoFunc)   cff_ps_get_font_info,
     (PS_GetFontExtraFunc)  NULL,
     (PS_HasGlyphNamesFunc) cff_ps_has_glyph_names,
-    (PS_GetFontPrivateFunc)NULL         /* unsupported with CFF fonts */
+    (PS_GetFontPrivateFunc)NULL,        /* unsupported with CFF fonts */
+    (PS_GetFontValueFunc)  NULL         /* not implemented            */
   )
 
 
@@ -467,8 +450,7 @@
 
     if ( cff )
     {
-      CFF_FontRecDict     dict    = &cff->top_font.font_dict;
-      FT_Service_PsCMaps  psnames = (FT_Service_PsCMaps)cff->psnames;
+      CFF_FontRecDict  dict = &cff->top_font.font_dict;
 
 
       if ( dict->cid_registry == 0xFFFFU )
@@ -480,18 +462,16 @@
       if ( registry )
       {
         if ( cff->registry == NULL )
-          cff->registry = cff_index_get_sid_string( &cff->string_index,
-                                                    dict->cid_registry,
-                                                    psnames );
+          cff->registry = cff_index_get_sid_string( cff,
+                                                    dict->cid_registry );
         *registry = cff->registry;
       }
-      
+
       if ( ordering )
       {
         if ( cff->ordering == NULL )
-          cff->ordering = cff_index_get_sid_string( &cff->string_index,
-                                                    dict->cid_ordering,
-                                                    psnames );
+          cff->ordering = cff_index_get_sid_string( cff,
+                                                    dict->cid_ordering );
         *ordering = cff->ordering;
       }
 
@@ -509,7 +489,7 @@
         *supplement = (FT_Int)dict->cid_supplement;
       }
     }
-      
+
   Fail:
     return error;
   }
@@ -619,18 +599,35 @@
   cff_get_interface( FT_Module    driver,       /* CFF_Driver */
                      const char*  module_interface )
   {
+    FT_Library           library;
     FT_Module            sfnt;
     FT_Module_Interface  result;
-    FT_Library           library = driver->library;
-    FT_UNUSED(library);
 
+
+    /* FT_CFF_SERVICES_GET derefers `library' in PIC mode */
+#ifdef FT_CONFIG_OPTION_PIC
+    if ( !driver )
+      return NULL;
+    library = driver->library;
+    if ( !library )
+      return NULL;
+#endif
 
     result = ft_service_list_lookup( FT_CFF_SERVICES_GET, module_interface );
     if ( result != NULL )
-      return  result;
+      return result;
+
+    /* `driver' is not yet evaluated in non-PIC mode */
+#ifndef FT_CONFIG_OPTION_PIC
+    if ( !driver )
+      return NULL;
+    library = driver->library;
+    if ( !library )
+      return NULL;
+#endif
 
     /* we pass our request to the `sfnt' module */
-    sfnt = FT_Get_Module( driver->library, "sfnt" );
+    sfnt = FT_Get_Module( library, "sfnt" );
 
     return sfnt ? sfnt->clazz->get_interface( sfnt, module_interface ) : 0;
   }
@@ -644,12 +641,13 @@
 #define CFF_SIZE_SELECT 0
 #endif
 
-  FT_DEFINE_DRIVER(cff_driver_class,
+  FT_DEFINE_DRIVER( cff_driver_class,
+
       FT_MODULE_FONT_DRIVER       |
       FT_MODULE_DRIVER_SCALABLE   |
       FT_MODULE_DRIVER_HAS_HINTER,
 
-      sizeof( CFF_DriverRec ),
+      sizeof ( CFF_DriverRec ),
       "cff",
       0x10000L,
       0x20000L,
@@ -661,9 +659,9 @@
       cff_get_interface,
 
     /* now the specific driver fields */
-    sizeof( TT_FaceRec ),
-    sizeof( CFF_SizeRec ),
-    sizeof( CFF_GlyphSlotRec ),
+    sizeof ( TT_FaceRec ),
+    sizeof ( CFF_SizeRec ),
+    sizeof ( CFF_GlyphSlotRec ),
 
     cff_face_init,
     cff_face_done,
@@ -672,14 +670,14 @@
     cff_slot_init,
     cff_slot_done,
 
-    ft_stub_set_char_sizes, /* FT_CONFIG_OPTION_OLD_INTERNALS */
+    ft_stub_set_char_sizes,  /* FT_CONFIG_OPTION_OLD_INTERNALS */
     ft_stub_set_pixel_sizes, /* FT_CONFIG_OPTION_OLD_INTERNALS */
 
-    Load_Glyph,
+    cff_glyph_load,
 
     cff_get_kerning,
-    0,                      /* FT_Face_AttachFunc      */
-    cff_get_advances,       /* FT_Face_GetAdvancesFunc */
+    0,                       /* FT_Face_AttachFunc */
+    cff_get_advances,
 
     cff_size_request,
 

@@ -366,11 +366,13 @@
 
       if ( count == 0 )
       {
+        /* No unicode chars here! */
         FT_FREE( table->maps );
         if ( !error )
-          error = PSnames_Err_Invalid_Argument;  /* No unicode chars here! */
+          error = PSnames_Err_No_Unicode_Glyph_Name;
       }
-      else {
+      else
+      {
         /* Reallocate if the number of used entries is much smaller. */
         if ( count < num_glyphs / 2 )
         {
@@ -519,7 +521,7 @@
 
 
 #ifdef FT_CONFIG_OPTION_ADOBE_GLYPH_LIST
-  FT_DEFINE_SERVICE_PSCMAPSREC(pscmaps_interface, 
+  FT_DEFINE_SERVICE_PSCMAPSREC(pscmaps_interface,
     (PS_Unicode_ValueFunc)     ps_unicode_value,
     (PS_Unicodes_InitFunc)     ps_unicodes_init,
     (PS_Unicodes_CharIndexFunc)ps_unicodes_char_index,
@@ -534,7 +536,7 @@
 
 #else
 
-  FT_DEFINE_SERVICE_PSCMAPSREC(pscmaps_interface, 
+  FT_DEFINE_SERVICE_PSCMAPSREC(pscmaps_interface,
     0,
     0,
     0,
@@ -550,7 +552,7 @@
 #endif /* FT_CONFIG_OPTION_ADOBE_GLYPH_LIST */
 
 
-  FT_DEFINE_SERVICEDESCREC1(pscmaps_services, 
+  FT_DEFINE_SERVICEDESCREC1(pscmaps_services,
     FT_SERVICE_ID_POSTSCRIPT_CMAPS, &FT_PSCMAPS_INTERFACE_GET
   )
 
@@ -561,8 +563,19 @@
   psnames_get_service( FT_Module    module,
                        const char*  service_id )
   {
-    FT_Library library = module->library;
-    FT_UNUSED(library);
+    /* FT_PSCMAPS_SERVICES_GET derefers `library' in PIC mode */
+#ifdef FT_CONFIG_OPTION_PIC
+    FT_Library  library;
+
+
+    if ( !module )
+      return NULL;
+    library = module->library;
+    if ( !library )
+      return NULL;
+#else
+    FT_UNUSED( module );
+#endif
 
     return ft_service_list_lookup( FT_PSCMAPS_SERVICES_GET, service_id );
   }
@@ -577,7 +590,7 @@
 #endif
 
   FT_DEFINE_MODULE(psnames_module_class,
-  
+
     0,  /* this is not a font driver, nor a renderer */
     sizeof ( FT_ModuleRec ),
 

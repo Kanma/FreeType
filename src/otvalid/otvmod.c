@@ -214,7 +214,8 @@
     *ot_jstf = (FT_Bytes)jstf;
 
   Exit:
-    if ( error ) {
+    if ( error )
+    {
       FT_Memory  memory = FT_FACE_MEMORY( face );
 
 
@@ -224,6 +225,7 @@
       FT_FREE( gsub );
       FT_FREE( jstf );
     }
+
     {
       FT_Memory  memory = FT_FACE_MEMORY( face );
 
@@ -264,7 +266,7 @@
   const FT_Module_Class  otv_module_class =
   {
     0,
-    sizeof( FT_ModuleRec ),
+    sizeof ( FT_ModuleRec ),
     "otvalid",
     0x10000L,
     0x20000L,
